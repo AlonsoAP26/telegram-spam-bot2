@@ -4,6 +4,8 @@ from flask import Flask
 import os
 import asyncio
 import threading
+import requests
+import time
 
 # ==== Servidor Flask requerido por Render ====
 app = Flask(__name__)
@@ -12,11 +14,15 @@ app = Flask(__name__)
 def home():
     return 'Bot funcionando correctamente (Render)'
 
+@app.route('/ping')
+def ping():
+    return 'pong', 200
+
 def run_web():
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 5050))
     app.run(host="0.0.0.0", port=port)
 
-# ==== Funciones de bot ====
+# ==== Funciones del bot ====
 async def getListOfGroups(client):
     try:
         dialogs = await client.get_dialogs()
@@ -84,7 +90,7 @@ async def loguserbot():
 
         try:
             for i in groups_info:
-                if i['group_name'] not in ["PeruSinLimites", "PERU SIN LIMITES"]:
+                if i['group_name'] not in ["Peru Sin Limites", "PERU SIN LIMITES"]:
                     j = 0
                     for message_spam in messages_list:
                         j += 1
@@ -104,7 +110,7 @@ async def loguserbot():
                                 f'<b>Mensaje enviado a {i["group_name"]}</b>',
                                 parse_mode="HTML"
                             )
-                            await asyncio.sleep(11)
+                            await asyncio.sleep(5)
                         if j == 3:
                             break
                     await client.send_message(os.getenv("LOGS_CHANNEL"), "<b>RONDA ACABADA</b>", parse_mode="HTML")
@@ -112,10 +118,29 @@ async def loguserbot():
         except Exception as e:
             print(f"Error en el ciclo principal: {e}")
 
-# ==== Ejecutar todo ====
-def start_bot():
-    asyncio.run(loguserbot())
+# ==== Auto-ping para mantener activo Render ====
+def auto_ping():
+    while True:
+        try:
+            url = os.getenv("SELF_URL", "https://telegram-spam-bot2.onrender.com/")
+            print(f"Auto-ping to {url}")
+            requests.get(url)
+        except Exception as e:
+            print(f"Error en autoping: {e}")
+        time.sleep(300)  # cada 5 minutos
 
+# ==== Iniciar bot ====
+def start_bot():
+    try:
+        asyncio.run(loguserbot())
+    except Exception as e:
+        print(f"Error crítico en loguserbot: {e}")
+
+# ==== Ejecución principal ====
 if __name__ == "__main__":
-    threading.Thread(target=start_bot).start()
-    run_web()
+    threading.Thread(target=run_web, daemon=True).start()
+    threading.Thread(target=start_bot, daemon=True).start()
+    threading.Thread(target=auto_ping, daemon=True).start()
+
+    while True:
+        time.sleep(1)
